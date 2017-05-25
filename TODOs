@@ -1,0 +1,9 @@
+
+# TODOs
+
+- Connect to a pl-chess process. Ask it about available moves.
+
+- View a game using pl-chess as backend
+
+- Support different board sizes e.g by using SVG-images instead
+
