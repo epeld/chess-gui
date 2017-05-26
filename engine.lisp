@@ -203,3 +203,60 @@ option name UCI_AnalyseMode type check default false
 ;;(parse-option "option name UCI_AnalyseMode type check default false")
 ;;(parse-option "option name Book File type string default book.bin")
 ;;(parse-option "option name Slow Mover type spin default 100 min 10 max 1000")
+
+
+(defun make-panel (&rest contents)
+  (let ((panel (jnew "javax.swing.JPanel")))
+    (loop for component in contents do
+         (jcall "add" panel component))
+    panel))
+
+
+(defun south ()
+  (jfield (jclass "java.awt.BorderLayout") "SOUTH"))
+
+(defun north ()
+  (jfield (jclass "java.awt.BorderLayout") "NORTH"))
+
+(defun center ()
+  (jfield (jclass "java.awt.BorderLayout") "CENTER"))
+
+(defun create-frame ()
+  (let ((frame (jnew "javax.swing.JFrame" "Engine Analysis"))
+        content
+
+        (fen-label (jnew "javax.swing.JLabel" "Position"))
+        (fen-field (jnew "javax.swing.JTextField" *initial-fen*))
+        
+        (go-btn (jnew "javax.swing.JButton" "Start"))
+        (settings-btn (jnew "javax.swing.JButton" "Settings"))
+        (log-btn (jnew "javax.swing.JButton" "Engine Logs"))
+
+        (layout (jnew "java.awt.BorderLayout"))
+
+        (list (jnew "javax.swing.JList" (jarray-from-list '("foo" "bar")))))
+
+    (setf content (jcall "getContentPane" frame))
+
+    (jcall "setLayout" content layout)
+    
+    ;; FEN
+    (jcall "setLabelFor" fen-label fen-field)
+    (jcall "add" content (make-panel fen-label fen-field) (north))
+
+    ;; Center
+    ;;(jcall "add" content (jnew "javax.swing.JLabel" "TODO" (jfield (jclass "javax.swing.SwingConstants") "CENTER")) (center))
+    (jcall "add" content list (center))
+    (jcall "setSize" list 200 200)
+    (jcall "setVisibleRowCount" list 5)
+
+    ;; Buttons
+    (jcall "add" content (make-panel go-btn settings-btn log-btn) (south))
+
+    (jcall "setVisible" frame t)
+    (jcall "pack" frame)))
+
+
+(create-frame)
+
+(defvar *initial-fen* "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
