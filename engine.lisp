@@ -76,7 +76,7 @@
       ()
     
     (when (string= "uciok" line)
-      (return))
+      (return options))
 
     (push (parse-option line)
           options)))
