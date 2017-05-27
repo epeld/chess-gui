@@ -44,8 +44,8 @@
 
 (defun all-input-lines (&optional wait-first)
   (do ((line (next-line wait-first) (next-line))
-       lines)
-      ()
+       (lines nil))
+      (t)
 
     (when (null line)
       (return (reverse lines)))
@@ -72,7 +72,7 @@
   (write-line "uci")
   (do ((line (next-line t) (next-line t))
        (count 0 (1+ count))
-       options)
+       (options nil))
       ()
     
     (when (string= "uciok" line)
@@ -166,8 +166,7 @@ option name UCI_AnalyseMode type check default false")
   (ecase type
     (:spin (make-instance 'spin :name name :value (parse-integer value) :min (parse-min rest) :max (parse-max rest)))
     (:string (make-instance 'string-option :name name :value value))
-    (:check (make-instance 'check :name name :value (string-equal "true" value)))
-    (:button (make-instance 'check :name name))))
+    (:check (make-instance 'check :name name :value (string-equal "true" value)))))
 
 (defun parse-option (string)
   (let* ((name (search "name" string))
@@ -175,7 +174,7 @@ option name UCI_AnalyseMode type check default false")
          (default (search "default" string :start2 type))
          name-end type-end default-end rest)
 
-    (unless (and name type default)
+    (unless (and name type)
       (error "Invalid option '~a'" string))
 
     ;;
@@ -183,19 +182,27 @@ option name UCI_AnalyseMode type check default false")
     ;;
     (setf name-end (+ name (length "name") 1))
     (setf type-end (+ type (length "type") 1))
-    (setf default-end (+ default (length "default") 1))
-    (setf rest (search " " string :start2 default-end))
+
+    (when default
+      (setf default-end (+ default (length "default") 1))
+      (setf rest (search " " string :start2 default-end)))
 
     (let ((name-str (subseq string name-end (- type 1)))
-          (type-str (subseq string type-end (- default 1)))
-          (default-str (if rest
-                           (subseq string default-end (- rest 1))
-                           (subseq string default-end)))
-          (remainder (if rest (subseq string rest) nil)))
+          (type-str (subseq string type-end (if default (- default 1) (length string))))
+          default-str remainder)
 
-      (parse-option-specific (find type-str '(:check :spin :button :string)
-                                   :test #'string-equal)
-                             name-str default-str remainder))))
+      ;; Special case
+      (if (string-equal "button" type-str)
+          (make-instance 'button :name name-str)
+
+          ;; Default case
+          (progn
+            (setf default-str (subseq string default-end rest))
+            (setf remainder (if rest (subseq string (1+ rest)) nil))
+
+            (parse-option-specific (find type-str '(:check :spin :string)
+                                         :test #'string-equal)
+                                   name-str default-str remainder))))))
 
 
 ;;(parse-option "option name UCI_AnalyseMode type check default false")
@@ -218,6 +225,12 @@ option name UCI_AnalyseMode type check default false")
 
 (defun center ()
   (jfield (jclass "java.awt.BorderLayout") "CENTER"))
+
+(defun west ()
+  (jfield (jclass "java.awt.BorderLayout") "WEST"))
+
+(defun east ()
+  (jfield (jclass "java.awt.BorderLayout") "EAST"))
 
 (defun create-frame ()
   (let ((frame (jnew "javax.swing.JFrame" "Engine Analysis"))
@@ -255,7 +268,7 @@ option name UCI_AnalyseMode type check default false")
     (jcall "pack" frame)))
 
 
-(create-frame)
+; (create-frame)
 
 (defvar *initial-fen* "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
 
@@ -270,16 +283,35 @@ option name UCI_AnalyseMode type check default false")
   (jnew "javax.swing.JTextField" (option-value s) 20))
 
 (defmethod option-widget ((s spin))
-  (jnew "javax.swing.JSlider" (option-min-value s) (option-max-value s) (option-value s)))
-
+  (let ((slider (jnew "javax.swing.JSlider" (option-min-value s) (option-max-value s) (option-value s))))
+    (jcall "setPaintLabels" slider t)
+    (jcall "setPaintTicks" slider t)
+    (jcall "setLabelTable" slider (jcall "createStandardLabels" slider (ceiling (/ (- (option-max-value s) (option-min-value s)) 5))))
+    slider))
 
 (defmethod option-widget ((s check))
   (let ((b (jnew "javax.swing.JCheckBox")))
-    (jcall "setSelected" b (option-value s))))
+    (jcall "setSelected" b (option-value s))
+    b))
 
+
+(defun labeled (string component)
+  (let ((panel (jnew "javax.swing.JPanel"))
+        (lbl (jnew "javax.swing.JLabel" string)))
+    (jcall "setLabelFor" lbl component)
+    (jcall "add" panel lbl (west))
+    (jcall "add" panel component (center))
+
+    ;(jcall "setLayout" panel (jnew "java.awt.FlowLayout"))
+
+    (jcall "setSize" panel 300 30)
+    panel))
 
 (defun create-options-frame (options)
   (let ((frame (jnew "javax.swing.JFrame" "Engine Settings")))
+
+    ;(jcall "setLayout" frame (jnew "javax.swing.BoxLayout" (jcall "getContentPane" frame) (jfield "javax.swing.BoxLayout" "Y_AXIS")))
+    (jcall "setLayout" frame (jnew "java.awt.GridLayout" (ceiling (length options) 3) 3))
     
     (loop for option in options do
          
@@ -298,6 +330,6 @@ option name UCI_AnalyseMode type check default false")
       (return (reverse lines)))))
 
 ;; TODO:
-(quote (loop for line in (split-lines *stockfish-options*)
-          do (parse-option line)))
+(create-options-frame (loop for line in (split-lines *stockfish-options*)
+                         collect (parse-option line)))
 
