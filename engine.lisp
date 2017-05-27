@@ -82,9 +82,8 @@
           options)))
 
 
-(defvar *stockfish-options*
-  "
-option name Use Debug Log type check default false
+(defparameter *stockfish-options*
+  "option name Use Debug Log type check default false
 option name Use Search Log type check default false
 option name Search Log Filename type string default SearchLog.txt
 option name Book File type string default book.bin
@@ -113,8 +112,7 @@ option name Emergency Move Time type spin default 70 min 0 max 5000
 option name Minimum Thinking Time type spin default 20 min 0 max 5000
 option name Slow Mover type spin default 100 min 10 max 1000
 option name UCI_Chess960 type check default false
-option name UCI_AnalyseMode type check default false
-")
+option name UCI_AnalyseMode type check default false")
 
 
 (defclass option ()
@@ -168,7 +166,7 @@ option name UCI_AnalyseMode type check default false
   (ecase type
     (:spin (make-instance 'spin :name name :value (parse-integer value) :min (parse-min rest) :max (parse-max rest)))
     (:string (make-instance 'string-option :name name :value value))
-    (:check (make-instance 'check :name name :value value))
+    (:check (make-instance 'check :name name :value (string-equal "true" value)))
     (:button (make-instance 'check :name name))))
 
 (defun parse-option (string)
@@ -260,3 +258,46 @@ option name UCI_AnalyseMode type check default false
 (create-frame)
 
 (defvar *initial-fen* "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
+
+
+(defgeneric option-widget (t)
+  (:documentation "Create a widget used to control the option"))
+
+(defmethod option-widget ((s button))
+  (jnew "javax.swing.JButton" "OK"))
+
+(defmethod option-widget ((s string-option))
+  (jnew "javax.swing.JTextField" (option-value s) 20))
+
+(defmethod option-widget ((s spin))
+  (jnew "javax.swing.JSlider" (option-min-value s) (option-max-value s) (option-value s)))
+
+
+(defmethod option-widget ((s check))
+  (let ((b (jnew "javax.swing.JCheckBox")))
+    (jcall "setSelected" b (option-value s))))
+
+
+(defun create-options-frame (options)
+  (let ((frame (jnew "javax.swing.JFrame" "Engine Settings")))
+    
+    (loop for option in options do
+         
+       (let ((w (make-panel (labeled (option-name option) (option-widget option)))))
+         (jcall "add" frame w)))
+
+    (jcall "setVisible" frame t)
+    (jcall "pack" frame)))
+
+(defun split-lines (string)
+  (do* ((prev 0 (+ 1 space))
+        (space (search '(#\Newline) string) (search '(#\Newline) string :start2 prev))
+        (lines nil (cons (subseq string prev space) lines)))
+       ()
+    (when (null space)
+      (return (reverse lines)))))
+
+;; TODO:
+(quote (loop for line in (split-lines *stockfish-options*)
+          do (parse-option line)))
+
