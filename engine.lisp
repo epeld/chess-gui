@@ -4,6 +4,53 @@
 (defvar *buffered-reader* nil)
 (defvar *buffered-writer* nil)
 
+(defclass analysis ()
+  ((bestmove :documentation "The suggested best move in the current position"
+             :type string
+             :accessor analysis-bestmove
+             :initform :unknown)
+   (pvs :documentation "A list of variations"
+        :accessor analysis-pvs
+        :initform nil))
+  (:documentation "An analysis is started with the engine command 'go' and stops when reciving 'bestmove'"))
+
+(defclass engine ()
+  ((process :documentation "Handle to external engine process"
+            :type process
+            :accessor engine-process)
+   (reader :documentation "Java class Buffered Reader (for reading from the engine)"
+           :accessor engine-reader)
+   (writer :documentation "Java class Buffered Writer (for writing to from engine)"
+           :accessor engine-writer)
+   (state :documentation "The last known state of the engine"
+           :type keyword
+           :accessor engine-state
+           :initform :not-initialized)
+   (analysis :documentation "The current 'analysis'-report"
+             :type analysis
+             :accessor engine-analysis
+             :initform nil))
+  (:documentation "Everything you need to talk to a UCI engine"))
+
+(defun prefixedp (prefix string)
+  (string-equal prefix string :end2 (length prefix)))
+
+
+(defun engine-handle-message (engine message)
+  (cond
+    ((prefixedp "info")
+     (format t "Engine info message '~a'~%" message))
+    
+    ((prefixedp "pv")
+     ;; TODO handle a pv
+     (warn "unparsed pv '~a' ~%" message))
+
+    ((prefixedp "bestmove")
+     (setf (analysis-bestmove (engine-analysis engine))
+           (subseq message (length "bestmove ")))
+     (setf (engine-state engine) :idle))))
+
+
 (defun start-process ()
   (let ((runtime (jstatic "getRuntime" "java.lang.Runtime")))
     (setf *engine-process*
