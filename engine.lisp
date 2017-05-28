@@ -36,26 +36,27 @@
             :accessor engine-options
             :initform nil))
 
-  ;; TODO add slots for state-changed and analysis-changed listeners
   (:documentation "Everything you need to talk to a UCI engine"))
 
 (defun prefixedp (prefix string)
   (string-equal prefix string :end2 (length prefix)))
 
 
-(defun engine-handle-message (engine message)
-  (cond
-    ((prefixedp "info")
-     (format t "Engine info message '~a'~%" message))
+(defun engine-handle-message (model message)
+  (let ((engine (model-engine model)))
+    (cond
+      ((prefixedp "info")
+       (format t "Engine info message '~a'~%" message))
     
-    ((prefixedp "pv")
-     ;; TODO handle a pv
-     (warn "unparsed pv '~a' ~%" message))
+      ((prefixedp "pv")
+       ;; TODO handle a pv
+       (warn "unparsed pv '~a' ~%" message))
 
-    ((prefixedp "bestmove")
-     (setf (analysis-bestmove (engine-analysis engine))
-           (subseq message (length "bestmove ")))
-     (setf (engine-state engine) :idle))))
+      ((prefixedp "bestmove")
+       (setf (analysis-bestmove (engine-analysis engine))
+             (subseq message (length "bestmove ")))
+       (setf (engine-state engine) :idle)
+       (notify model '(:engine :state))))))
 
 
 (defun start-process (name)
@@ -305,7 +306,7 @@ option name UCI_AnalyseMode type check default false")
 (defun east ()
   (jfield (jclass "java.awt.BorderLayout") "EAST"))
 
-(defun create-frame ()
+(defun create-frame (model)
   (let ((frame (jnew "javax.swing.JFrame" "Engine Analysis"))
         content
 
@@ -313,6 +314,8 @@ option name UCI_AnalyseMode type check default false")
         (fen-field (jnew "javax.swing.JTextField" *initial-fen*))
         
         (go-btn (jnew "javax.swing.JButton" "Start"))
+        (stop-btn (jnew "javax.swing.JButton" "Stop"))
+        
         (settings-btn (jnew "javax.swing.JButton" "Settings"))
         (log-btn (jnew "javax.swing.JButton" "Engine Logs"))
 
@@ -333,9 +336,22 @@ option name UCI_AnalyseMode type check default false")
     (jcall "add" content list (center))
     (jcall "setSize" list 200 200)
     (jcall "setVisibleRowCount" list 5)
+    (subscribe model
+               (lambda (n)
+                 (declare (ignore n))
+                 ;; TODO
+                 (quote (jcall "setListData" list (jarray-list (engine-analysis))))))
 
     ;; Buttons
-    (jcall "add" content (make-panel go-btn settings-btn log-btn) (south))
+    (jcall "add" content (make-panel go-btn stop-btn settings-btn log-btn) (south))
+    (subscribe model
+               (lambda (n)
+                 (declare (ignore n))
+                 (let ((r (runningp (model-engine model))))
+                   (jcall "setVisible" go-btn (not r))
+                   (jcall "setVisible" stop-btn r)
+                   (jcall "setDisabled" settings-btn r)
+                   (jcall "setDisabled" log-btn r))))
 
     (jcall "setVisible" frame t)
     (jcall "pack" frame)))
@@ -403,16 +419,16 @@ option name UCI_AnalyseMode type check default false")
       (return (reverse lines)))))
 
 
-(defun process-pending-messages (engine)
+(defun process-pending-messages (model)
   "Read all output input from the engine and update our state"
-  (let ((lines (all-input-lines engine)))
+  (let ((lines (all-input-lines (model-engine model))))
     (when lines
       (loop for line in lines do
-           (engine-handle-message engine line)))))
+           (engine-handle-message model line)))))
 
 
 
-(defun install-periodic-timer (engine)
+(defun install-periodic-timer (model)
   "Construct a timer that will periodically poll and parse messages from the engine"
   (jcall (jnew "javax.swing.Timer" 300
                (jinterface-implementation
@@ -421,18 +437,43 @@ option name UCI_AnalyseMode type check default false")
                 "actionPerformed"
                 (lambda (ev)
                   (declare (ignore ev))
-                  (process-pending-messages engine))))
+                  (process-pending-messages model))))
          
          "start"))
 
 
+(defclass data-model ()
+  ((subscribers :documentation "List of lambdas to call when notifications go out"
+               :type list
+               :accessor model-subscribers
+               :initform nil)
+   (engine :documentation "An instance of the engine class"
+           :type engine
+           :accessor model-engine))
+  (:documentation "Container for all the data in the application. Also manages notifications for when data changes"))
 
-;; TODO make init-engine and everything else accept param
+
+(defun subscribe (model fn)
+  "Add a notification subscriber to the model. Fn should accept one arguments: the notification (e.g a list of keywords or nil)"
+  (push fn (model-subscribers model)))
+
+
+(defun notify (model &optional namespace)
+  "Send out a notification to all subscribers. If notification is specified, subscribers can use that to filter out notifications if they don't want to listen to all of them"
+  (loop for s in (model-subscribers model) do
+       (funcall s namespace)))
+
+(defun create-model (engine)
+  (make-instance 'data-model
+                 :engine engine))
+
+
 (defun run-app ()
-  (let ((engine (start-engine "stockfish")))
+  (let ((engine (start-engine "stockfish"))
+        (model (create-model engine)))
   
-    (create-frame engine)
-    (install-periodic-timer engine)))
+    (create-frame model)
+    (install-periodic-timer model)))
 
 ;; Idea: disable 'settings' and 'start' when engine is running.
 ;; Always accept 'stop'
