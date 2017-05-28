@@ -38,6 +38,33 @@
   (string-equal prefix string :end2 (length prefix)))
 
 
+(defclass pv ()
+  ((depth :documentation "Search depth"
+          :accessor pv-depth
+          :initarg :depth)
+   (seldepth :documentation "SelectiveSearch depth"
+          :accessor pv-seldepth
+          :initarg :seldepth)
+   (score :documentation "score (centipawns or MATE)"
+          :accessor pv-scoe
+          :initarg :score)
+   (nodes :documentation "nodes processed"
+          :accessor pv-nodes
+          :initarg :nodes)
+   (nps :documentation "nodes processed per second"
+        :accessor pv-nps
+        :initarg :nps)
+   (time :documentation "Time thinking"
+        :accessor pv-time
+        :initarg :time)
+   (index :documentation "Multipv index"
+          :accessor pv-index
+          :initarg :index)
+   (moves :documentation "List of moves"
+          :accessor pv-moves
+          :initarg :moves))
+  (:documentation "Represents a primary variation (or whatever PV stands for..)"))
+
 (defun model-handle-message (model message)
   (let ((engine (model-engine model)))
     (cond
@@ -317,7 +344,7 @@ option name UCI_AnalyseMode type check default false")
   (let ((frame (jnew "javax.swing.JFrame" "Engine Analysis"))
         content
 
-        (fen-label (jnew "javax.swing.JLabel" "Position"))
+        ;;(fen-label (jnew "javax.swing.JLabel" "Position"))
         (fen-field (jnew "javax.swing.JTextField" *initial-fen*))
         
         (go-btn (jnew "javax.swing.JButton" "Start"))
@@ -328,15 +355,14 @@ option name UCI_AnalyseMode type check default false")
 
         (layout (jnew "java.awt.BorderLayout"))
 
-        (list (jnew "javax.swing.JList" (jarray-from-list '("foo" "bar")))))
+        (list (jnew "javax.swing.JList")))
 
     (setf content (jcall "getContentPane" frame))
 
     (jcall "setLayout" content layout)
     
     ;; FEN
-    (jcall "setLabelFor" fen-label fen-field)
-    (jcall "add" content (make-panel fen-label fen-field) (north))
+    (jcall "add" content (labeled "Position" fen-field) (north))
 
     ;; Center
     ;;(jcall "add" content (jnew "javax.swing.JLabel" "TODO" (jfield (jclass "javax.swing.SwingConstants") "CENTER")) (center))
@@ -346,8 +372,8 @@ option name UCI_AnalyseMode type check default false")
     (subscribe model
                (lambda (n)
                  (declare (ignore n))
-                 ;; TODO
-                 (quote (jcall "setListData" list (jarray-list (engine-analysis))))))
+                 (update-analysis-list list (engine-analysis (model-engine model)))
+                 (jcall "pack" frame)))
 
     ;; Buttons
     (jcall "add" content (make-panel go-btn stop-btn settings-btn log-btn) (south))
@@ -419,9 +445,9 @@ option name UCI_AnalyseMode type check default false")
     (jcall "add" panel lbl (west))
     (jcall "add" panel component (center))
 
-    ;(jcall "setLayout" panel (jnew "java.awt.FlowLayout"))
+    ;;(jcall "setLayout" panel (jnew "java.awt.FlowLayout"))
 
-    (jcall "setSize" panel 300 30)
+    ;;(jcall "setSize" panel 300 30)
     panel))
 
 (defun create-options-frame (options)
@@ -469,7 +495,7 @@ option name UCI_AnalyseMode type check default false")
   "Construct a timer that will periodically poll and parse messages from the engine"
   (let (timer)
 
-    (setf timer (jnew "javax.swing.Timer" 3000
+    (setf timer (jnew "javax.swing.Timer" 300
                       (jinterface-implementation
                        "java.awt.event.ActionListener"
 
@@ -512,8 +538,8 @@ option name UCI_AnalyseMode type check default false")
   (loop for s in (model-subscribers model) do
        (handler-case
            (funcall s namespace)
-         (error ()
-           (warn "Error occured when notifying ~s~%" namespace)))))
+         (error (err)
+           (warn "Error occured when notifying ~s ~a~%" namespace err)))))
 
 (defun create-model (engine)
   (make-instance 'data-model
@@ -570,3 +596,13 @@ option name UCI_AnalyseMode type check default false")
 
 (defun runningp (engine)
   (eql :running (engine-state engine)))
+
+
+(defun analysis-bestmove-no-ponder (analysis)
+  (let ((bestmove (analysis-bestmove analysis)))
+    (unless (eql :unknown bestmove)
+      (subseq bestmove 0 (search " ponder" bestmove)))))
+
+(defun update-analysis-list (list analysis)
+  (let ((bestmove (analysis-bestmove-no-ponder analysis)))
+    (jcall "setListData" list (jarray-from-list (list (or bestmove "??"))))))
