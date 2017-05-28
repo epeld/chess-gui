@@ -430,16 +430,20 @@ option name UCI_AnalyseMode type check default false")
 
 (defun install-periodic-timer (model)
   "Construct a timer that will periodically poll and parse messages from the engine"
-  (jcall (jnew "javax.swing.Timer" 300
-               (jinterface-implementation
-                "java.awt.ActionListener"
+  (let (timer)
 
-                "actionPerformed"
-                (lambda (ev)
-                  (declare (ignore ev))
-                  (process-pending-messages model))))
-         
-         "start"))
+    (setf timer (jnew "javax.swing.Timer" 300
+                      (jinterface-implementation
+                       "java.awt.ActionListener"
+
+                       "actionPerformed"
+                       (lambda (ev)
+                         (declare (ignore ev))
+                         (when (model-stop-timersp model)
+                           (jcall "stop" timer))
+                         (process-pending-messages model)))))
+    
+    (jcall timer "start")))
 
 
 (defclass data-model ()
@@ -449,7 +453,11 @@ option name UCI_AnalyseMode type check default false")
                :initform nil)
    (engine :documentation "An instance of the engine class"
            :type engine
-           :accessor model-engine))
+           :accessor model-engine)
+   (stop-timers :documentation "Flag indicating if we should stop background tasks"
+                :type boolean
+                :accessor model-stop-timersp
+                :initform nil))
   (:documentation "Container for all the data in the application. Also manages notifications for when data changes"))
 
 
@@ -468,10 +476,14 @@ option name UCI_AnalyseMode type check default false")
                  :engine engine))
 
 
+(defvar *current-model* nil)
+
 (defun run-app ()
   (let ((engine (start-engine "stockfish"))
         (model (create-model engine)))
-  
+
+    (setf *current-model* model)
+    
     (create-frame model)
     (install-periodic-timer model)))
 
