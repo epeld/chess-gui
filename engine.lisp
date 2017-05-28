@@ -359,6 +359,8 @@ option name UCI_AnalyseMode type check default false")
                    (jcall "setVisible" stop-btn r)
                    (jcall "setEnabled" settings-btn (not r))
                    (jcall "setEnabled" log-btn (not r)))))
+
+    (jcall "setVisible" log-btn nil)
     
     (jcall "addActionListener" go-btn
            (jinterface-implementation
