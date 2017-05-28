@@ -464,13 +464,15 @@ option name UCI_AnalyseMode type check default false")
     (jcall "setVisible" frame t)
     (jcall "pack" frame)))
 
-(defun split-lines (string)
-  (do* ((prev 0 (+ 1 space))
-        (space (search '(#\Newline) string) (search '(#\Newline) string :start2 prev))
-        (lines nil (cons (subseq string prev space) lines)))
-       ()
-    (when (null space)
-      (return (reverse lines)))))
+(defun split-string (string &optional (sep #\Newline))
+  "Split a string on each occurence of the sep character"
+  (unless (string= "" string)  
+    (do* ((prev 0 (+ 1 space))
+          (space (search `(,sep) string) (search `(,sep) string :start2 prev))
+          (lines (list (subseq string prev space)) (cons (subseq string prev space) lines)))
+         ()
+      (when (null space)
+        (return (reverse lines))))))
 
 
 (defun process-pending-messages (model)
@@ -602,3 +604,66 @@ option name UCI_AnalyseMode type check default false")
 (defun update-analysis-list (list analysis)
   (let ((bestmove (analysis-bestmove-no-ponder analysis)))
     (jcall "setListData" list (jarray-from-list (list (or bestmove "??"))))))
+
+
+(defparameter *sample-info* "info depth 3 seldepth 2 score cp 12 nodes 253 nps 253000 time 1 multipv 2 pv b1c3 g8f6 g1f3 b8c6")
+
+
+(defun find-value-string (string name)
+  "Find the value of the property \"name\" within \"string\""
+  (let ((match (search (format nil " ~a " name) string)))
+    (when match
+      
+      ;; Skip the name plus two space
+      (incf match (+ 2 (length name)))
+
+      (cond ((string-equal "score" name)
+             (let ((first-space (1+ (search " " string :start2 match))))
+               (unless first-space
+                 (error "Expected #\Space after %s" name))
+               (return-from find-value-string (subseq string match (search " " string :start2 first-space)))))
+
+            ((string-equal "pv" name)
+             (return-from find-value-string (subseq string match)))
+
+            (t
+             (subseq string match (search " " string :start2 match)))))))
+
+(defun find-value (string name &optional (numericp t))
+  "Find the value of the property \"name\" within \"string\""
+  (let ((v (find-value-string string name)))
+    (if numericp
+        (parse-integer v)
+        v)))
+
+
+(defun parse-score (score)
+  (cond ((prefixedp "cp" score)
+         `(:centipawns . ,(parse-integer (subseq score (length "cp ")))))
+
+        ((prefixedp "mate" score)
+         `(:mate . ,(parse-integer (subseq score (length "mate ")))))
+
+        (t
+         (warn "Unknown score format ~s" score))))
+
+(defun parse-info-pv (string)
+  (let ((depth (find-value string "depth"))
+        (seldepth (find-value string "seldepth"))
+        (score (find-value string "score" nil))
+        (nps (find-value string "nps"))
+        (nodes (find-value string "nodes"))
+        (multipv (find-value string "multipv"))
+        (time (find-value string "time"))
+        (pv (find-value string "pv" nil)))
+    
+    (make-instance 'pv
+                   :score (parse-score score)
+                   :moves (split-string pv #\Space)
+                   :index multipv
+                   :nps nps
+                   :nodes nodes
+                   :depth depth
+                   :seldepth seldepth
+                   :time time)))
+
