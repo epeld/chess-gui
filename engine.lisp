@@ -19,9 +19,11 @@
             :type process
             :accessor engine-process)
    (reader :documentation "Java class Buffered Reader (for reading from the engine)"
-           :accessor engine-reader)
+           :accessor engine-reader
+           :initform :nil)
    (writer :documentation "Java class Buffered Writer (for writing to from engine)"
-           :accessor engine-writer)
+           :accessor engine-writer
+           :initform nil)
    (state :documentation "The last known state of the engine"
            :type keyword
            :accessor engine-state
@@ -29,7 +31,12 @@
    (analysis :documentation "The current 'analysis'-report"
              :type analysis
              :accessor engine-analysis
-             :initform nil))
+             :initform nil)
+   (options :documentation "The list of engine options parsed during UCI init process"
+            :accessor engine-options
+            :initform nil))
+
+  ;; TODO add slots for state-changed and analysis-changed listeners
   (:documentation "Everything you need to talk to a UCI engine"))
 
 (defun prefixedp (prefix string)
@@ -51,46 +58,61 @@
      (setf (engine-state engine) :idle))))
 
 
-(defun start-process ()
+(defun start-process (name)
   (let ((runtime (jstatic "getRuntime" "java.lang.Runtime")))
     (setf *engine-process*
           (jcall "exec"
                  runtime
-                 (jarray-from-list '("stockfish"))
+                 (jarray-from-list `(,name))
                  (jarray-from-list '("TEST=true"))
                  (jnew "java.io.File" ".")))))
 
 
+(defun start-engine (&optional (name "stockfish"))
+  "Start an engine process, returning an instance of the engine class"
+  (let* ((p (start-process name))
+         (engine (make-instance 'engine :process p)))
 
-(defun error-stream ()
-  (jcall "getErrorStream" *engine-process*))
+    (setf (engine-reader engine) (input-reader engine))
+    (setf (engine-writer engine) (output-writer engine))
 
-(defun output-stream ()
-  (jcall "getOutputStream" *engine-process*))
-
-(defun input-stream ()
-  (jcall "getInputStream" *engine-process*))
-
-
-(defun input-reader ()
-  (unless *buffered-reader*
-    (setf *buffered-reader* (jnew "java.io.BufferedReader" (jnew "java.io.InputStreamReader" (input-stream)))))
-  *buffered-reader*)
-
-
-(defun output-writer ()
-  (unless *buffered-writer*
-    (setf *buffered-writer* (jnew "java.io.BufferedWriter" (jnew "java.io.OutputStreamWriter" (output-stream)))))
-  *buffered-writer*)
+    ;; Read the version info directly
+    (format t "Started Analysis Engine '~a'~%" (next-line engine t))
+    (init-engine engine)
+    (format t "UCI Initialized. Options parsed~%")
+    
+    engine))
 
 
-(defun next-line (&optional wait)
-  (when (or wait (jcall "ready" (input-reader)))
-    (jcall "readLine" (input-reader))))
+
+(defun error-stream (engine)
+  (jcall "getErrorStream" (engine-process engine)))
+
+(defun output-stream (engine)
+  (jcall "getOutputStream" (engine-process engine)))
+
+(defun input-stream (engine)
+  (jcall "getInputStream" (engine-process engine)))
 
 
-(defun all-input-lines (&optional wait-first)
-  (do ((line (next-line wait-first) (next-line))
+(defun input-reader (engine)
+  "Helper for creating a buffered reader from a process"
+  (jnew "java.io.BufferedReader" (jnew "java.io.InputStreamReader" (input-stream engine))))
+
+
+(defun output-writer (engine)
+  "Helper for creating a buffered writer to a process"
+  (jnew "java.io.BufferedWriter" (jnew "java.io.OutputStreamWriter" (output-stream engine))))
+
+
+(defun next-line (engine &optional wait)
+  (let ((reader (engine-reader engine)))
+    (when (or wait (jcall "ready" reader))
+      (jcall "readLine" reader))))
+
+
+(defun all-input-lines (engine &optional wait-first)
+  (do ((line (next-line engine wait-first) (next-line engine))
        (lines nil))
       (t)
 
@@ -100,10 +122,11 @@
     (push line lines)))
 
 
-(defun write-line (string)
-  (jcall "write" (output-writer) string 0 (jcall "length" string))
-  (jcall "newLine" (output-writer))
-  (jcall "flush" (output-writer)))
+(defun write-line (engine string)
+  (let ((writer (engine-writer engine)))
+    (jcall "write" writer string 0 (jcall "length" string))
+    (jcall "newLine" writer)
+    (jcall "flush" writer)))
 
 
 ;;(write-line "isready")
@@ -115,18 +138,21 @@
 ;; (start-process)
 
 
-(defun init-engine ()
-  (write-line "uci")
-  (do ((line (next-line t) (next-line t))
-       (count 0 (1+ count))
-       (options nil))
-      ()
+(defun init-engine (engine)
+  (write-line engine "uci")
+  (let (options)
+    (do ((line (next-line engine t) (next-line engine t))
+         (count 0 (1+ count)))
+        ()
     
-    (when (string= "uciok" line)
-      (return options))
+      (when (string= "uciok" line)
+        (return))
 
-    (push (parse-option line)
-          options)))
+      (push (parse-option line)
+            options))
+
+    (setf (engine-options engine) options)
+    options))
 
 
 (defparameter *stockfish-options*
@@ -376,7 +402,38 @@ option name UCI_AnalyseMode type check default false")
     (when (null space)
       (return (reverse lines)))))
 
-;; TODO:
-(create-options-frame (loop for line in (split-lines *stockfish-options*)
-                         collect (parse-option line)))
 
+(defun process-pending-messages (engine)
+  "Read all output input from the engine and update our state"
+  (let ((lines (all-input-lines engine)))
+    (when lines
+      (loop for line in lines do
+           (engine-handle-message engine line)))))
+
+
+
+(defun install-periodic-timer (engine)
+  "Construct a timer that will periodically poll and parse messages from the engine"
+  (jcall (jnew "javax.swing.Timer" 300
+               (jinterface-implementation
+                "java.awt.ActionListener"
+
+                "actionPerformed"
+                (lambda (ev)
+                  (declare (ignore ev))
+                  (process-pending-messages engine))))
+         
+         "start"))
+
+
+
+;; TODO make init-engine and everything else accept param
+(defun run-app ()
+  (let ((engine (start-engine "stockfish")))
+  
+    (create-frame engine)
+    (install-periodic-timer engine)))
+
+;; Idea: disable 'settings' and 'start' when engine is running.
+;; Always accept 'stop'
+;; How to deal with 'position'? write "stop\nposition XX\ngo"
