@@ -561,10 +561,6 @@ option name UCI_AnalyseMode type check default false")
 (defun run-app ()
   (create-frame (init-data-layer)))
 
-;; Idea: disable 'settings' and 'start' when engine is running.
-;; Always accept 'stop'
-;; How to deal with 'position'? write "stop\nposition XX\ngo"
-
 (defun engine-go (engine position &optional go-args)
   "Run the engine, sending the position command first to make sure we are analysing the right position"
   (let ((cmd (if go-args
