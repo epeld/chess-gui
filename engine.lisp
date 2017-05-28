@@ -1,12 +1,7 @@
 
-(defvar *engine-process* nil)
-
-(defvar *buffered-reader* nil)
-(defvar *buffered-writer* nil)
 
 (defclass analysis ()
   ((bestmove :documentation "The suggested best move in the current position"
-             :type string
              :accessor analysis-bestmove
              :initform :unknown)
    (pvs :documentation "A list of variations"
@@ -17,7 +12,8 @@
 (defclass engine ()
   ((process :documentation "Handle to external engine process"
             :type process
-            :accessor engine-process)
+            :accessor engine-process
+            :initarg :process)
    (reader :documentation "Java class Buffered Reader (for reading from the engine)"
            :accessor engine-reader
            :initform :nil)
@@ -42,21 +38,24 @@
   (string-equal prefix string :end2 (length prefix)))
 
 
-(defun engine-handle-message (model message)
+(defun model-handle-message (model message)
   (let ((engine (model-engine model)))
     (cond
-      ((prefixedp "info")
-       (format t "Engine info message '~a'~%" message))
+      ((prefixedp "info" message)
+       (format nil "Engine info message '~a'~%" message))
     
-      ((prefixedp "pv")
+      ((prefixedp "pv" message)
        ;; TODO handle a pv
        (warn "unparsed pv '~a' ~%" message))
 
-      ((prefixedp "bestmove")
+      ((prefixedp "bestmove" message)
        (setf (analysis-bestmove (engine-analysis engine))
              (subseq message (length "bestmove ")))
        (setf (engine-state engine) :idle)
-       (notify model '(:engine :state))))))
+       (notify model '(:engine :state)))
+
+      (t
+       (warn "Unrecognized Engine Message ~s" message)))))
 
 
 (defun start-process (name)
@@ -109,22 +108,26 @@
 (defun next-line (engine &optional wait)
   (let ((reader (engine-reader engine)))
     (when (or wait (jcall "ready" reader))
-      (jcall "readLine" reader))))
+      (let ((line (jcall "readLine" reader)))
+        (format t "engine-> ~a~%" line)
+        line))))
 
 
 (defun all-input-lines (engine &optional wait-first)
-  (do ((line (next-line engine wait-first) (next-line engine))
-       (lines nil))
-      (t)
+  (let (lines)
+    (do ((line (next-line engine wait-first) (next-line engine)))
+        ()
 
-    (when (null line)
-      (return (reverse lines)))
-    
-    (push line lines)))
+      (when (null line)
+        (return))
+      
+      (push line lines))
+    (reverse lines)))
 
 
 (defun write-line (engine string)
   (let ((writer (engine-writer engine)))
+    (format t "gui-> ~a~%" string)
     (jcall "write" writer string 0 (jcall "length" string))
     (jcall "newLine" writer)
     (jcall "flush" writer)))
@@ -147,10 +150,14 @@
         ()
     
       (when (string= "uciok" line)
+        (setf (engine-state engine) :idle)
         (return))
 
-      (push (parse-option line)
-            options))
+      (handler-case
+          (push (parse-option line)
+                options)
+        (type-error ()
+          (warn "Failed to parse ~s" line))))
 
     (setf (engine-options engine) options)
     options))
@@ -350,11 +357,30 @@ option name UCI_AnalyseMode type check default false")
                  (let ((r (runningp (model-engine model))))
                    (jcall "setVisible" go-btn (not r))
                    (jcall "setVisible" stop-btn r)
-                   (jcall "setDisabled" settings-btn r)
-                   (jcall "setDisabled" log-btn r))))
+                   (jcall "setEnabled" settings-btn (not r))
+                   (jcall "setEnabled" log-btn (not r)))))
+    
+    (jcall "addActionListener" go-btn
+           (jinterface-implementation
+            "java.awt.event.ActionListener"
+
+            "actionPerformed"
+            (lambda (ev)
+              (declare (ignore ev))
+              (start-analysis model))))
+
+    (jcall "addActionListener" stop-btn
+           (jinterface-implementation
+            "java.awt.event.ActionListener"
+
+            "actionPerformed"
+            (lambda (ev)
+              (declare (ignore ev))
+              (stop-analysis model))))
 
     (jcall "setVisible" frame t)
-    (jcall "pack" frame)))
+    (jcall "pack" frame)
+    (notify model)))
 
 
 ; (create-frame)
@@ -424,26 +450,33 @@ option name UCI_AnalyseMode type check default false")
   (let ((lines (all-input-lines (model-engine model))))
     (when lines
       (loop for line in lines do
-           (engine-handle-message model line)))))
+           (handler-case
+               (model-handle-message model line)
+             (error ()
+               (warn "Error on engine message ~s" line)))))))
 
 
+(defun periodic-read (timer model)
+  ;; (format t "Tick~%")
+  (when (model-stop-timersp model)
+    (format t "Stopping timer~%")
+    (jcall "stop" timer))
+  (process-pending-messages model))
 
 (defun install-periodic-timer (model)
   "Construct a timer that will periodically poll and parse messages from the engine"
   (let (timer)
 
-    (setf timer (jnew "javax.swing.Timer" 300
+    (setf timer (jnew "javax.swing.Timer" 3000
                       (jinterface-implementation
-                       "java.awt.ActionListener"
+                       "java.awt.event.ActionListener"
 
                        "actionPerformed"
                        (lambda (ev)
                          (declare (ignore ev))
-                         (when (model-stop-timersp model)
-                           (jcall "stop" timer))
-                         (process-pending-messages model)))))
+                         (periodic-read timer model)))))
     
-    (jcall timer "start")))
+    (jcall "start" timer)))
 
 
 (defclass data-model ()
@@ -453,11 +486,16 @@ option name UCI_AnalyseMode type check default false")
                :initform nil)
    (engine :documentation "An instance of the engine class"
            :type engine
-           :accessor model-engine)
+           :accessor model-engine
+           :initarg :engine)
    (stop-timers :documentation "Flag indicating if we should stop background tasks"
                 :type boolean
                 :accessor model-stop-timersp
-                :initform nil))
+                :initform nil)
+   (position :documentation "The current position. Sent to engine when analysis starts"
+             :type string
+             :accessor model-position
+             :initform "startpos"))
   (:documentation "Container for all the data in the application. Also manages notifications for when data changes"))
 
 
@@ -468,8 +506,12 @@ option name UCI_AnalyseMode type check default false")
 
 (defun notify (model &optional namespace)
   "Send out a notification to all subscribers. If notification is specified, subscribers can use that to filter out notifications if they don't want to listen to all of them"
+  ;; (format t "Notifying ~s~%" namespace)
   (loop for s in (model-subscribers model) do
-       (funcall s namespace)))
+       (handler-case
+           (funcall s namespace)
+         (error ()
+           (warn "Error occured when notifying ~s~%" namespace)))))
 
 (defun create-model (engine)
   (make-instance 'data-model
@@ -478,15 +520,51 @@ option name UCI_AnalyseMode type check default false")
 
 (defvar *current-model* nil)
 
-(defun run-app ()
-  (let ((engine (start-engine "stockfish"))
-        (model (create-model engine)))
+(defun init-data-layer ()
+  (let* ((engine (start-engine "stockfish"))
+         (model (create-model engine)))
 
+    (install-periodic-timer model)
     (setf *current-model* model)
-    
-    (create-frame model)
-    (install-periodic-timer model)))
+    model))
+
+
+
+(defun run-app ()
+  (create-frame (init-data-layer)))
 
 ;; Idea: disable 'settings' and 'start' when engine is running.
 ;; Always accept 'stop'
 ;; How to deal with 'position'? write "stop\nposition XX\ngo"
+
+(defun engine-go (engine position &optional go-args)
+  "Run the engine, sending the position command first to make sure we are analysing the right position"
+  (let ((cmd (if go-args
+                 (concatenate 'string "go " go-args)
+                 "go")))
+    (setf (engine-state engine) :running)
+    (setf (engine-analysis engine) (make-instance 'analysis))
+    (write-line engine (format nil "position ~s" position))
+    (write-line engine cmd)))
+
+
+(defun engine-stop (engine)
+  (write-line engine "stop"))
+
+
+(defun start-analysis (model)
+  "Start analysis, notifying GUI that state is now :RUNNING"
+  (let ((s (engine-state (model-engine model))))
+    (unless (eql :idle s)
+      (error "Cannot start analysis while engine is ~a" s))  )
+
+  (engine-go (model-engine model) (model-position model))
+  (notify model '(:engine :state)))
+
+
+(defun stop-analysis (model)
+  "Requests that the engine STOP. Note that the engine will not stop immediately, so no state-notification will go out synchroneously from this call"
+  (engine-stop (model-engine model)))
+
+(defun runningp (engine)
+  (eql :running (engine-state engine)))
