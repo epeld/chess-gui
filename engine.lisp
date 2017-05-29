@@ -28,8 +28,10 @@
 (defun error-stream (engine)
   (jcall "getErrorStream" (engine-process engine)))
 
+
 (defun output-stream (engine)
   (jcall "getOutputStream" (engine-process engine)))
+
 
 (defun input-stream (engine)
   (jcall "getInputStream" (engine-process engine)))
@@ -112,3 +114,21 @@
 
 (defun runningp (engine)
   (eql :running (engine-state engine)))
+
+
+(defun engine-handle-message (engine message)
+  "Handle a message received from the engine"
+  (cond
+    ((prefixedp "info" message)
+     (format nil "Engine info message '~a'~%" message))
+
+    ;; TODO handle pv!
+    
+    ((prefixedp "bestmove" message)
+     ;; TODO consider parsing the bestmove line here first..
+     (setf (analysis-bestmove (engine-analysis engine))
+           (subseq message (length "bestmove ")))
+     (setf (engine-state engine) :idle))
+
+    (t
+     (warn "Unrecognized Engine Message ~s" message))))

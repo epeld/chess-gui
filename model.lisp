@@ -77,21 +77,15 @@
 ;; Message Loop Utils
 ;;
 
-;; TODO this belongs partially in engine-file. We need to split it somehow
-(defun model-handle-message (model message)
-  (let ((engine (model-engine model)))
-    (cond
-      ((prefixedp "info" message)
-       (format nil "Engine info message '~a'~%" message))
-    
-      ((prefixedp "bestmove" message)
-       (setf (analysis-bestmove (engine-analysis engine))
-             (subseq message (length "bestmove ")))
-       (setf (engine-state engine) :idle)
-       (notify model '(:engine :state)))
 
-      (t
-       (warn "Unrecognized Engine Message ~s" message)))))
+(defun model-handle-message (model message)
+  "Handle a message coming from the engine"
+  
+  (let* ((engine (model-engine model))
+         (state (engine-state engine)))
+    (engine-handle-message engine message)
+    (unless (eql state (engine-state engine))
+      (notify model '(:engine :state)))))
 
 
 (defun process-pending-messages (model)
