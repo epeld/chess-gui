@@ -143,7 +143,7 @@
 (defun all-input-lines (engine &optional wait-first)
   (let (lines)
     (do ((line (next-line engine wait-first) (next-line engine)))
-        ()
+        (nil)
 
       (when (null line)
         (return))
@@ -174,7 +174,7 @@
   (let (options)
     (do ((line (next-line engine t) (next-line engine t))
          (count 0 (1+ count)))
-        ()
+        (nil)
     
       (when (string= "uciok" line)
         (setf (engine-state engine) :idle)
@@ -470,7 +470,7 @@ option name UCI_AnalyseMode type check default false")
     (do* ((prev 0 (+ 1 space))
           (space (search `(,sep) string) (search `(,sep) string :start2 prev))
           (lines (list (subseq string prev space)) (cons (subseq string prev space) lines)))
-         ()
+         (nil)
       (when (null space)
         (return (reverse lines))))))
 
