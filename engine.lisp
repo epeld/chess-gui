@@ -255,65 +255,38 @@ option name UCI_AnalyseMode type check default false")
         :initarg :max)))
 
 
-(defun parse-min (string)
-  (let ((min (+ 1 (length "min") (search "min" string))))
-    (parse-integer
-     (subseq string
-             min
-             (search " " string :start2 min)))))
-
-
-(defun parse-max (string)
-  (let ((max (+ 1 (length "max") (search "max" string))))
-    (parse-integer
-     (subseq string
-             max
-             (search " " string :start2 max)))))
-
-(defun parse-option-specific (type name value rest)
-  (ecase type
-    (:spin (make-instance 'spin :name name :value (parse-integer value) :min (parse-min rest) :max (parse-max rest)))
-    (:string (make-instance 'string-option :name name :value value))
-    (:check (make-instance 'check :name name :value (string-equal "true" value)))))
+(defun find-option-name (string)
+  "Find the name of an option, which is a special case because it can contain spaces"
+  (let ((start (search " name " string)))
+    (when start
+      (incf start (length " name "))
+      (subseq string start (search " type " string :start2 start)))))
 
 (defun parse-option (string)
-  (let* ((name (search "name" string))
-         (type (search "type" string :start2 name))
-         (default (search "default" string :start2 type))
-         name-end type-end default-end rest)
+  (let ((name (find-option-name string))
+        (type (find-value-string string "type"))
+        (default (find-value-string string "default"))
+        (min (find-value string "max"))
+        (max (find-value string "min")))
+    (ecase (find type '(:check :spin :string :button) :test #'string-equal)
 
-    (unless (and name type)
-      (error "Invalid option '~a'" string))
+      (:button
+       (make-instance 'button :name name))
 
-    ;;
-    ;; Move to the end of each respective string
-    ;;
-    (setf name-end (+ name (length "name") 1))
-    (setf type-end (+ type (length "type") 1))
+      (:spin
+       (assert (and min max default))
+       (make-instance 'spin :name name :value (parse-integer default) :max max :min min))
 
-    (when default
-      (setf default-end (+ default (length "default") 1))
-      (setf rest (search " " string :start2 default-end)))
+      (:check
+       (assert (and default))
+       (make-instance 'check :name name :value (string-equal "true" default)))
 
-    (let ((name-str (subseq string name-end (- type 1)))
-          (type-str (subseq string type-end (if default (- default 1) (length string))))
-          default-str remainder)
-
-      ;; Special case
-      (if (string-equal "button" type-str)
-          (make-instance 'button :name name-str)
-
-          ;; Default case
-          (progn
-            (setf default-str (subseq string default-end rest))
-            (setf remainder (if rest (subseq string (1+ rest)) nil))
-
-            (parse-option-specific (find type-str '(:check :spin :string)
-                                         :test #'string-equal)
-                                   name-str default-str remainder))))))
+      (:string
+       (assert (and default))
+       (make-instance 'string-option :name name :value default)))))
 
 
-;;(parse-option "option name UCI_AnalyseMode type check default false")
+;;(parse-option "option name UCI_AnalyseMode type check default true")
 ;;(parse-option "option name Book File type string default book.bin")
 ;;(parse-option "option name Slow Mover type spin default 100 min 10 max 1000")
 
@@ -632,7 +605,7 @@ option name UCI_AnalyseMode type check default false")
 (defun find-value (string name &optional (numericp t))
   "Find the value of the property \"name\" within \"string\""
   (let ((v (find-value-string string name)))
-    (if numericp
+    (if (and numericp v)
         (parse-integer v)
         v)))
 
