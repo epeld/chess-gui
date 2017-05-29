@@ -1,4 +1,6 @@
 
+(in-package :chess.engine.types)
+
 ;;
 ;; Engine Definitions
 ;;

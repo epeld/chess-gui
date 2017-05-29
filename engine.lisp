@@ -1,4 +1,6 @@
 
+(in-package :chess.engine)
+
 (defun start-process (name)
   (let ((runtime (jstatic "getRuntime" "java.lang.Runtime")))
     (setf *engine-process*
