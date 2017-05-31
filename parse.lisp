@@ -1,5 +1,5 @@
 
-(in-package :chess.engine.parse)
+(in-package :chess-engine-parse)
 
 
 (defparameter *stockfish-options*

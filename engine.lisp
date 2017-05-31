@@ -1,5 +1,5 @@
 
-(in-package :chess.engine)
+(in-package :chess-engine)
 
 
 (defvar *engine-process* nil
@@ -7,7 +7,7 @@
   "Reference to a running chess analysis engine")
 
 (defun start-process (name)
-  (setf *engine-process* (sb-ext:run-program name)))
+  (setf *engine-process* (sb-ext:run-program name nil)))
 
 
 (defun start-engine (&optional (name "stockfish"))

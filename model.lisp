@@ -1,5 +1,5 @@
 
-(in-package :chess.engine.model)
+(in-package :chess-engine-model)
 
 ;;
 ;;  App Data Model
