@@ -98,8 +98,6 @@ option name UCI_AnalyseMode type check default false"
 
       (cond ((string-equal "score" name)
              (let ((first-space (1+ (search " " string :start2 match))))
-               (unless first-space
-                 (error "Expected #\Space after %s" name))
                (return-from find-value-string (subseq string match (search " " string :start2 first-space)))))
 
             ((string-equal "pv" name)

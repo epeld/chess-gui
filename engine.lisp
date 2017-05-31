@@ -1,14 +1,13 @@
 
 (in-package :chess.engine)
 
+
+(defvar *engine-process* nil
+  
+  "Reference to a running chess analysis engine")
+
 (defun start-process (name)
-  (let ((runtime (jstatic "getRuntime" "java.lang.Runtime")))
-    (setf *engine-process*
-          (jcall "exec"
-                 runtime
-                 (jarray-from-list `(,name))
-                 (jarray-from-list '("TEST=true"))
-                 (jnew "java.io.File" ".")))))
+  (setf *engine-process* (sb-ext:run-program name)))
 
 
 (defun start-engine (&optional (name "stockfish"))
@@ -28,36 +27,41 @@
 
 
 (defun error-stream (engine)
-  (jcall "getErrorStream" (engine-process engine)))
+  "Return the engine error stream"
+  (sb-ext:process-error (chess.engine.types:engine-process engine)))
 
 
 (defun output-stream (engine)
-  (jcall "getOutputStream" (engine-process engine)))
+  "Return a writable stream for sending messages to the engine (output for US)"
+  (sb-ext:process-input (engine-process engine)))
 
 
 (defun input-stream (engine)
-  (jcall "getInputStream" (engine-process engine)))
+  "Return a readable stream for reading messages from the engine (input for US)"
+  (sb-ext:process-output (engine-process engine)))
 
 
 (defun input-reader (engine)
   "Helper for creating a buffered reader from a process"
-  (jnew "java.io.BufferedReader" (jnew "java.io.InputStreamReader" (input-stream engine))))
+  (input-stream engine))
 
 
 (defun output-writer (engine)
   "Helper for creating a buffered writer to a process"
-  (jnew "java.io.BufferedWriter" (jnew "java.io.OutputStreamWriter" (output-stream engine))))
+  (output-stream engine))
 
 
 (defun next-line (engine &optional wait)
+  "Read a single line of the engine's output, optionally blocking until a line is availble (or returning NIL)"
   (let ((reader (engine-reader engine)))
-    (when (or wait (jcall "ready" reader))
-      (let ((line (jcall "readLine" reader)))
+    (when (or wait (sb-gray:stream-listen reader))
+      (let ((line (read-line reader)))
         (format t "engine-> ~a~%" line)
         line))))
 
 
 (defun all-input-lines (engine &optional wait-first)
+  "Read all available input lines, optionally blocking until at least one line is available"
   (let (lines)
     (do ((line (next-line engine wait-first) (next-line engine)))
         (nil)
@@ -69,16 +73,16 @@
     (reverse lines)))
 
 
-(defun write-line (engine string)
+(defun send-line (engine string)
+  "Send a single line of input to the engine"
   (let ((writer (engine-writer engine)))
     (format t "gui-> ~a~%" string)
-    (jcall "write" writer string 0 (jcall "length" string))
-    (jcall "newLine" writer)
-    (jcall "flush" writer)))
+    (write-line string writer)
+    (force-output writer)))
 
 
 (defun init-engine (engine)
-  (write-line engine "uci")
+  (send-line engine "uci")
   (let (options)
     (do ((line (next-line engine t) (next-line engine t))
          (count 0 (1+ count)))
@@ -105,13 +109,13 @@
                  "go")))
     (setf (engine-state engine) :running)
     (setf (engine-analysis engine) (make-instance 'analysis))
-    (write-line engine (format nil "position ~s" position))
-    (write-line engine cmd)))
+    (send-line engine (format nil "position ~s" position))
+    (send-line engine cmd)))
 
 
 (defun engine-stop (engine)
   "Request that the engine stop."
-  (write-line engine "stop"))
+  (send-line engine "stop"))
 
 
 (defun runningp (engine)

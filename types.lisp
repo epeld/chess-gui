@@ -14,6 +14,7 @@
         :initform nil))
   (:documentation "An analysis is started with the engine command 'go' and stops when reciving 'bestmove'"))
 
+
 (defclass engine ()
   ((process :documentation "Handle to external engine process"
             :type process
