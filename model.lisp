@@ -98,3 +98,10 @@
                (model-handle-message model line)
              (error ()
                (warn "Error on engine message ~s" line)))))))
+
+
+(defvar *current-model* nil
+
+  "Current Instance")
+
+
