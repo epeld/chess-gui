@@ -1,3 +1,4 @@
 *~
 *.abcl*
 *.cls
+*.fasl
