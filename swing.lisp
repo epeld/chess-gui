@@ -1,5 +1,5 @@
 
-(in-package :chess.engine.gui)
+(in-package :chess-engine-gui)
 
 (defvar *initial-fen* "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
 
