@@ -57,7 +57,7 @@
                              (equal g b)
                              (equal b 255))
                   
-                  (setf (aref arr (+ (* i w) j))
+                  (setf (aref arr (+ (* (- h i) w) j))
                         (logior (ash r 24)
                                 (ash g 16)
                                 (ash b 8)
@@ -70,22 +70,6 @@
   (png-to-simple-array (read-png-from-file path)))
 
 
-;(read-png-from-file "./bitmaps/WhiteBishop_64.png")
-;(load-simple-array-from-file "./bitmaps/WhiteBishop_64.png")
-
-#|
-glGenTextures( 1, &texture );
-glBindTexture( GL_TEXTURE_2D, texture );
-glTexEnvf( GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE,GL_MODULATE );
-glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER,GL_LINEAR_MIPMAP_NEAREST );
-
-
-glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER,GL_LINEAR );
-glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_WRAP_S,GL_REPEAT );
-glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_WRAP_T,GL_REPEAT );
-gluBuild2DMipmaps( GL_TEXTURE_2D, 3, width, height,GL_RGB, GL_UNSIGNED_BYTE, data );
-free( data );
-|#
 
 (defun load-texture-from-png-file (file-path &optional (name file-path))
   "Load a texture from a file"
@@ -104,7 +88,7 @@ free( data );
         (load-texture-from-png-file file-path name))))
 
 
-(load-texture-from-png-file "./bitmaps/WhiteBishop_64.png" "WhiteBishop")
+;;(load-texture-from-png-file "./bitmaps/WhiteBishop_64.png" "WhiteBishop")
 
 
 (defun bind (name)
@@ -115,3 +99,11 @@ free( data );
 
     (gl:enable :texture-2d)
     (gl:bind-texture :texture-2d (cdr tex))))
+
+
+(defun delete-textures ()
+  "Delete all known textures"
+  (gl:bind-texture :texture-2d 0)
+  (gl:delete-textures (mapcar #'cdr *textures*))
+  (gl:disable :texture-2d)
+  (setf *textures* nil))
