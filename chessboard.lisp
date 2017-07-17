@@ -13,10 +13,14 @@
                  :tick-interval 50))
 
 
-(defparameter *square-light-color* '(0.8 0.7 0.7)
+(defparameter *square-dark-color*
+  (loop for x in '(#x73 #x6b #x5f) collect (float (/ x 255)))
   "The color of light chess squares")
 
-(defparameter *square-dark-color* '(0.1 0.1 0.2)
+
+(defparameter *square-light-color*
+  (loop for x in '(#xf7 #xd0 #xbc) collect
+       (float (/ x 255)))
   "The color of dark chess squares")
 
 
@@ -54,8 +58,13 @@
                 (render:quad i j w h)))
 
 
-      ;;(square-color 3 4)
-      (render:quad 3 3 w h "BlackQueen")
+      (gl:enable :blend)
+      (gl:blend-func :src-alpha :one-minus-src-alpha)
+      
+      (gl:color 1 1 1)
+      (render:quad 3 4 w h "WhiteQueen")
+      (render:quad 1 4 w h "BlackQueen")
+      (gl:disable :blend)
       )))
 
 
@@ -83,4 +92,4 @@
   (glut:swap-buffers))
 
 
-(application:run-application (new-instance)) 
+(application:run-application (new-instance))
