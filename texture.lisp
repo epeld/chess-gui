@@ -19,18 +19,17 @@
 
 (defun make-texture-from-png (png)
   "Create a new opengl texture from a loaded png"
-  (gl:enable :texture-2d)
-  (let ((tex (gl:gen-texture)))
+  (let ((tex (first (gl:gen-textures 1))))
+    (format t "Got texture ~a~%" tex)
     (unless tex
       (error "Couldn't generate texture"))
-    
+
+    (gl:enable :texture-2d)
     (gl:bind-texture :texture-2d tex)
-    (gl:tex-env :texture-env :texture-env-mode :modulate)
+    ;;(gl:tex-env :texture-env :texture-env-mode :modulate)
     (gl:tex-parameter :texture-2d :texture-min-filter :nearest)
-    (gl:tex-parameter :texture-2d :texture-mag-filter :linear)
-    (gl:tex-parameter :texture-2d :texture-wrap-s :repeat)
-    (gl:tex-parameter :texture-2d :texture-wrap-t :repeat)
-    (glu:build-2d-mipmaps :texture-2d 3 (png:image-width png) (png:image-height png) :rgba :unsigned-int (png-to-simple-array png))
+    (gl:tex-parameter :texture-2d :texture-mag-filter :nearest)
+    (gl:tex-image-2d :texture-2d 0 4 (png:image-width png) (png:image-height png) 0 :rgba :unsigned-int-8-8-8-8 (png-to-simple-array png))
     
     tex))
 
@@ -105,4 +104,14 @@ free( data );
         (load-texture-from-png-file file-path name))))
 
 
-(get-texture-from-png-file "./bitmaps/WhiteBishop_64.png" "WhiteBishop")
+(load-texture-from-png-file "./bitmaps/WhiteBishop_64.png" "WhiteBishop")
+
+
+(defun bind (name)
+  "Bind a texture by name"
+  (let ((tex (assoc name *textures* :test #'string-equal)))
+    (unless tex
+      (error "No such texture ~a" name))
+
+    (gl:enable :texture-2d)
+    (gl:bind-texture :texture-2d (cdr tex))))

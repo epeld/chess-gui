@@ -37,8 +37,18 @@ Expects clauses of the form: (primitive-type body*) which will be used in with-g
 
 (defun quad (row col width height)
   "Render a quad with the given row/col indexes and a given width/height"
+  (texture:bind "WhiteBishop")
+  (gl:enable :texture-2d)
+  (gl:color 1 1 1)
   (render:with-gl-primitives :quads
+    (gl:tex-coord 0 1)
     (gl:vertex (* col width) (* row height))
+
+    (gl:tex-coord 0 0)
     (gl:vertex (* col width) (* (1+ row) height))
+
+    (gl:tex-coord 1 0)
     (gl:vertex (* (1+ col) width) (* (1+ row) height))
+    
+    (gl:tex-coord 1 1)
     (gl:vertex (* (1+ col) width) (* row height))))

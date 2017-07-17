@@ -31,4 +31,6 @@
 
 (defpackage :foobar.texture
   (:use :cl)
+  (:export :bind
+           :get-texture-from-png-file)
   (:nicknames :texture))
