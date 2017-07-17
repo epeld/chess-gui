@@ -35,11 +35,16 @@ Expects clauses of the form: (primitive-type body*) which will be used in with-g
   (gl:vertex (* radius (cos radians)) (* radius (sin radians)) 0))
 
 
-(defun quad (row col width height)
+(defun quad (row col width height &optional texture)
   "Render a quad with the given row/col indexes and a given width/height"
-  (texture:bind "WhiteBishop")
-  (gl:enable :texture-2d)
-  (gl:color 1 1 1)
+
+  (if texture
+      (progn
+        (texture:bind texture)
+        (gl:enable :texture-2d))
+      (gl:disable :texture-2d))
+  
+  ;;(gl:color 1 1 1)
   (render:with-gl-primitives :quads
     (gl:tex-coord 0 0)
     (gl:vertex (* col width) (* row height))
@@ -51,4 +56,8 @@ Expects clauses of the form: (primitive-type body*) which will be used in with-g
     (gl:vertex (* (1+ col) width) (* (1+ row) height))
     
     (gl:tex-coord 1 0)
-    (gl:vertex (* (1+ col) width) (* row height))))
+    (gl:vertex (* (1+ col) width) (* row height)))
+  
+  (when texture
+    (gl:disable :texture-2d)))
+
