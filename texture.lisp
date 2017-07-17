@@ -19,8 +19,11 @@
 
 (defun make-texture-from-png (png)
   "Create a new opengl texture from a loaded png"
+  (unless png
+    (error "Null png"))
+  
   (let ((tex (first (gl:gen-textures 1))))
-    (format t "Got texture ~a~%" tex)
+    ;;(format t "Got texture ~a~%" tex)
     (unless tex
       (error "Couldn't generate texture"))
 
@@ -57,7 +60,7 @@
                              (equal g b)
                              (equal b 255))
                   
-                  (setf (aref arr (+ (* (- h i) w) j))
+                  (setf (aref arr (+ (* (- h i 1) w) j))
                         (logior (ash r 24)
                                 (ash g 16)
                                 (ash b 8)
@@ -71,8 +74,9 @@
 
 
 
-(defun load-texture-from-png-file (file-path &optional (name file-path))
+(defun load-texture-from-png-file (file-path name)
   "Load a texture from a file"
+  (format t "Loading texture ~a (~a) ~%" name file-path)
   (let* ((png (read-png-from-file file-path))
          (tex (make-texture-from-png png))
          (pair (cons name tex)))
@@ -89,6 +93,9 @@
 
 
 ;;(load-texture-from-png-file "./bitmaps/WhiteBishop_64.png" "WhiteBishop")
+
+(load-simple-array-from-png-file "./bitmaps/WhiteBishop_64.png")
+(load-simple-array-from-png-file "./bitmaps/BlackBishop_64.png")
 
 
 (defun bind (name)
