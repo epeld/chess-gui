@@ -91,6 +91,13 @@
         pair
         (load-texture-from-png-file file-path name))))
 
+(defun get-texture-by-name (name)
+  "Fetch a texture by name"
+  (let ((pair (assoc name *textures* :test #'string-equal)))
+    (if pair
+        pair
+        (error "No such texture ~a" name))))
+
 
 ;;(load-texture-from-png-file "./bitmaps/WhiteBishop_64.png" "WhiteBishop")
 
@@ -100,12 +107,14 @@
 
 (defun bind (name)
   "Bind a texture by name"
-  (let ((tex (assoc name *textures* :test #'string-equal)))
-    (unless tex
-      (error "No such texture ~a" name))
+  (if (consp name)
+      (bind (car name))
+      (let ((tex (assoc name *textures* :test #'string-equal)))
+        (unless tex
+          (error "No such texture ~a" name))
 
-    (gl:enable :texture-2d)
-    (gl:bind-texture :texture-2d (cdr tex))))
+        (gl:enable :texture-2d)
+        (gl:bind-texture :texture-2d (cdr tex)))))
 
 
 (defun delete-textures ()

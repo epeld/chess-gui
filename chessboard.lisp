@@ -1,6 +1,10 @@
 
 (in-package :chessboard)
 
+(defparameter *current-game*
+  (make-instance 'queen:game)
+  "Foo")
+
 (defclass chess-board-application (application:application)
   ()
   (:documentation "A Chess Board Application"))
@@ -10,7 +14,7 @@
   "Create a new application instance"
   (make-instance 'chess-board-application
                  :title "Chess Board"
-                 :tick-interval 50))
+                 :tick-interval 100))
 
 
 (defparameter *square-dark-color*
@@ -27,11 +31,43 @@
 (defconstant +num-cols+ 8)
 (defconstant +num-rows+ 8)
 
+
 (defun square-color (row col)
   "Sets the gl square color, given a row and col"
   (if (zerop (mod (+ row col) 2))
       (apply #'gl:color *square-light-color*)
       (apply #'gl:color *square-dark-color*)))
+
+
+(defun texture-path (color piece)
+  "Supply keywords for color and piece, receive texture path to load"
+  (format nil "./bitmaps/~:(~a~)~:(~a~)_64.png" color piece))
+
+
+(defun texture-name (color piece)
+  "Supply keywords for color and piece, receive texture name"
+  (format nil "~:(~a~)~:(~a~)" color piece))
+
+
+(defun render-piece (pc row col width height)
+  "Helper for rendering a piece (just like render:quad)"
+  (let* ((c (queen:piece-char pc))
+        
+         (color (if (eql c (char-upcase c))
+                    :white
+                    :black))
+        
+         (piece (ecase (char-upcase c)
+                  (#\B :bishop)
+                  (#\R :rook)
+                  (#\N :knight)
+                  (#\P :pawn)
+                  (#\K :king)
+                  (#\Q :queen))))
+
+    (gl:color 1 1 1)
+    (render:quad row col width height
+                 (texture-name color piece))))
 
 
 (defun chess-board ()
@@ -47,25 +83,21 @@
          (screen-width (- screen-end-x screen-start-x))
          (screen-height (- screen-end-y screen-start-y))
          (w (/ screen-width 8))
-         (h (/ screen-height 8)))
+         (h (/ screen-height 8))
+
+         (b (queen:game-board *current-game*)))
     
     (render:with-temp-matrix
       (gl:translate screen-start-x screen-start-x 0)
       
-      (loop for i upto +num-rows+ do
-           (loop for j upto +num-cols+ do
+      (loop for i below +num-rows+ do
+           (loop for j below +num-cols+ do
                 (square-color i j)
-                (render:quad i j w h)))
+                (render:quad i j w h)
 
-
-      (gl:enable :blend)
-      (gl:blend-func :src-alpha :one-minus-src-alpha)
-      
-      (gl:color 1 1 1)
-      (render:quad 3 4 w h "WhiteQueen")
-      (render:quad 1 4 w h "BlackQueen")
-      (gl:disable :blend)
-      )))
+                (let ((pc (queen:board-get b (queen:board-index i j))))
+                  (unless (zerop pc)
+                    (render-piece pc i j w h))))))))
 
 
 (defun load-piece-textures ()
@@ -76,7 +108,7 @@
     
     (loop for piece in pieces do
          (loop for color in colors do
-              (let ((path (format nil "./bitmaps/~:(~a~)~:(~a~)_64.png" color piece))
+              (let ((path (texture-path color piece))
                     (name (format nil "~:(~a~)~:(~a~)" color piece)))
                 (texture:get-texture-from-png-file path name))))))
 

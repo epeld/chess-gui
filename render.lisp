@@ -40,6 +40,8 @@ Expects clauses of the form: (primitive-type body*) which will be used in with-g
 
   (if texture
       (progn
+        (gl:enable :blend)
+        (gl:blend-func :src-alpha :one-minus-src-alpha)
         (texture:bind texture)
         (gl:enable :texture-2d))
       (gl:disable :texture-2d))
@@ -59,5 +61,6 @@ Expects clauses of the form: (primitive-type body*) which will be used in with-g
     (gl:vertex (* (1+ col) width) (* row height)))
   
   (when texture
-    (gl:disable :texture-2d)))
+    (gl:disable :texture-2d)
+    (gl:disable :blend)))
 

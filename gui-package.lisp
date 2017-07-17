@@ -3,6 +3,7 @@
 (ql:quickload :cl-glu)
 (ql:quickload :zpng)
 (ql:quickload :png)
+(ql:quickload :queen)
 
 (defpackage :foobar.render
   (:use :cl)
@@ -33,5 +34,6 @@
   (:use :cl)
   (:export :bind
            :get-texture-from-png-file
+           :get-texture-by-name
            :delete-textures)
   (:nicknames :texture))
